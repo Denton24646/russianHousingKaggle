@@ -1,0 +1,246 @@
+---
+title: "A Collection of New Features"
+author: "Philipp Spachtholz"
+output:
+  html_document:
+    fig_height: 4
+    fig_width: 7
+    theme: paper
+---
+
+There are already a lot of good ideas for feature engineering around for this competition. However, they are all scattered across
+different kernels and discussion threads.**Therefore, my plan here is to provide an easily accessible and extensible list of ideas for feature engineering (together with their implementation in R).**
+
+```
+Recent updates:
+- added for each sub area distance to kremlin
+- added longitude and latitude of sub_area
+- added proportions of houses with certain build material characteristics
+```
+
+Feel free to add new ideas in the comments and
+I'll add them to the list and please don't forget to **upvote** if you find it useful :-).
+
+Having said all that, let's jump right into it:
+
+```{r setup, include=FALSE}
+  knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Initialization
+```{r warning=FALSE, eval = FALSE}
+  library(readr)
+  library(dplyr)
+  library(lubridate)
+  library(stringr)
+
+  train <- read_csv('./input/train.csv')
+```
+
+##### Minimal data cleaning
+
+```{r eval=FALSE}
+train <- train %>% 
+  mutate(max_floor = as.numeric(max_floor), kitch_sq=as.numeric(kitch_sq), num_room=as.numeric(num_room), build_year=as.numeric(build_year), sub_area=as.factor(sub_area))
+train <- train %>% 
+  filter(build_year < 2020)
+
+```
+
+
+### Time features
+
+#### Split the timestamp feature
+
+```{r eval=FALSE}
+  # year
+  train <- train %>% 
+    mutate(year = year(timestamp))
+
+  # year_month
+  train <- train %>% 
+    mutate(year_month = make_date(year(timestamp),month(timestamp)))
+```
+
+
+#### Get month, week, weekday
+
+```{r eval=FALSE}
+  # month of year
+  train <- train %>% 
+    mutate(month_of_year = month(train$timestamp))
+
+  # week of year
+  train <- train %>% 
+    mutate(week_of_year = week(train$timestamp))
+
+  # day of month
+  train <- train %>% 
+    mutate(day_of_month = mday(train$timestamp))
+  
+  # weekday
+  train <- train %>% 
+    mutate(day_of_week = wday(train$timestamp))
+
+```
+
+
+### House characteristics
+
+
+
+
+```{r eval=FALSE}
+  # number of floors to the top of house
+  train <- train %>% 
+    mutate(floor_from_top = max_floor - floor)
+  
+  # relative position of floor in house
+  train <- train %>% 
+    mutate(floor_by_maxfloor = floor/max_floor)
+  
+  # average room size
+  train <- train %>% 
+    mutate(roomsize = (life_sq-kitch_sq)/num_room) 
+  
+  # relative proportion of living area
+  train <- train %>% 
+    mutate(life_proportion = life_sq/full_sq)
+  
+  # relative proportion of kitchen area
+  train <- train %>% 
+    mutate(kitchen_proportion = kitch_sq/full_sq)
+  
+  # extra area
+  train <- train %>% 
+    mutate(extra_area = full_sq - life_sq)
+  
+  # age of house at time of sale
+  train <- train %>% 
+    mutate(age_at_sale = interval(make_date(year=build_year),timestamp) / years(1))  
+  
+```
+
+### General sale characteristics
+```{r eval=F}
+  # number of sales per year_month
+  train <- train %>% 
+    group_by(year_month) %>% 
+    summarize(n_sales_permonth = n()) %>% 
+    right_join(train,by="year_month")
+```
+
+### Sub Area characteristics
+
+#### Location data
+For the location data you have to read in an [external data file](https://www.kaggle.com/jtremoureux/administrative-divisions-of-moscow). You can find a tutorial [here](https://www.kaggle.com/product-feedback/32423#post179905).
+
+```{r eval=FALSE}
+  # Longitude and Latitude
+  library(rgdal) # read the shapefile with readOGR()
+  shp <- readOGR(dsn = "./input/administrative-divisions-of-moscow", layer = "moscow_adm")
+  centroids <- coordinates(shp)  
+  sub_area <- shp$RAION
+  okrug <- shp$OKRUGS
+  location_data <- data.frame(sub_area = sub_area, okrug = okrug, longitude=centroids[,1], latitude=centroids[,2])
+  train <- train %>% 
+    left_join(location_data,by="sub_area")
+  
+  # Calculate distance from Kremlin for each sub_area
+  library(geosphere)
+  kremlin = data.frame(longitude = 37.617664,latitude = 55.752121)
+  train <- train %>% 
+    group_by(sub_area) %>% 
+    top_n(n = 1, wt=id) %>% 
+    ungroup %>% 
+    mutate(distance_from_kremlin = distm(.[c("longitude","latitude")], kremlin, fun=distHaversine)) %>% 
+    right_join(train, by="sub_area")
+
+```
+
+
+#### General price level of Sub Areas
+```{r eval =F}
+  # average price per raion
+  train <- train %>% 
+    group_by(sub_area) %>% 
+    summarize(mean_price_raion = mean(price_doc)) %>% 
+    right_join(train,by="sub_area")
+
+  # average price per raion per year
+  train <- train %>% 
+    group_by(sub_area, year) %>% 
+    summarize(mean_price_raion_year = mean(price_doc)) %>% 
+    right_join(train,by="sub_area")
+  
+  # average price per sqm per raion
+  train <- train %>% 
+    group_by(sub_area) %>% 
+    summarize(mean_price_persqm_raion = mean(price_doc/full_sq, na.rm=T)) %>% 
+    right_join(train,by="sub_area")
+  
+```
+
+#### Population characteristics
+```{r eval=F}
+  # population density per raion (i.e. Number of people per square meter)
+  train <- train %>% 
+    mutate(pop_density_raion = raion_popul/area_m)
+  
+  # Demographic structure of the raions
+  train <- train %>% 
+    mutate(young_proportion = young_all/full_all) # proportion of people younger than working age
+  train <- train %>% 
+    mutate(work_proportion = work_all/full_all) # proportion of people in working age
+  train <- train %>% 
+    mutate(retire_proportion = ekder_all/full_all) # proportion of people older than working age
+
+```
+
+#### Building information
+```{r eval=F}
+  # average building height per raion
+  train <- train %>% 
+    group_by(sub_area) %>% 
+    summarize(mean_building_height = mean(max_floor,na.rm=T)) %>% 
+    right_join(train,by="sub_area")
+
+  # Proportion of houses with certain build materials (e.g. 10% build_count_wood)
+  train<-train %>% 
+    mutate_each(funs(pct = (.)/raion_build_count_with_builddate_info),matches('^build_count_[a-zA-Z]*$'))
+```
+
+#### Educational characteristics
+```{r eval=F}
+  # ratio of number of pupils and preschool seats
+  train <- train %>% 
+    mutate(ratio_preschool = children_preschool / preschool_quota)
+
+  # ratio of number of pupils and school seats
+  train <- train %>% 
+    mutate(ratio_school = children_school / school_quota)
+
+```
+
+
+### dataset related features
+```{r eval =F}
+  # number of missing values per row (this is going to take a while)
+  train <- train %>% 
+    mutate(count_na_perrow = apply(., 1, function(x) sum(is.na(x))))
+```
+
+
+### Current To-do List
+
+1. ...
+
+
+#### Disclaimer
+1. Not all of these features are going to help your model prediction. So choose yours wisely.
+2. For consistency, I will demonstrate all these features for the train set only, while for some features it would make sense to calculate them for the full dataset
+3. For easier readibility, I do only minimal data cleaning in this kernel. As the new features are e.g. combinations of the basic features, it would make sense to properly clean those first.
+4. While I added some features on my own, most of the features were developed by someone else. As it is not easy to figure out who had the idea first, unfortunately I cannot give you proper credt. So for all of those who shared their ideas: my gratitude goes to you. 
+
+
+
