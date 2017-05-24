@@ -8,6 +8,8 @@ output:
     theme: paper
 ---
 
+DISCLAIMER: This script was taken from [this kaggle kernel](https://www.kaggle.com/philippsp/a-collection-of-new-features/code), most of this script is not the work of the authors of this repo.
+
 There are already a lot of good ideas for feature engineering around for this competition. However, they are all scattered across
 different kernels and discussion threads.**Therefore, my plan here is to provide an easily accessible and extensible list of ideas for feature engineering (together with their implementation in R).**
 
@@ -34,7 +36,7 @@ Having said all that, let's jump right into it:
   library(lubridate)
   library(stringr)
 
-  train <- read_csv('./input/train.csv')
+  train <- read_csv('../data/train_clean.csv')
 ```
 
 ##### Minimal data cleaning
@@ -135,10 +137,12 @@ train <- train %>%
 #### Location data
 For the location data you have to read in an [external data file](https://www.kaggle.com/jtremoureux/administrative-divisions-of-moscow). You can find a tutorial [here](https://www.kaggle.com/product-feedback/32423#post179905).
 
-```{r eval=FALSE}
+```
+  Skipping due to the dependency hell we enter when trying tinstall rgdal
+
   # Longitude and Latitude
   library(rgdal) # read the shapefile with readOGR()
-  shp <- readOGR(dsn = "./input/administrative-divisions-of-moscow", layer = "moscow_adm")
+  shp <- readOGR(dsn = "../data/moscow_adm.shp", layer = "moscow_adm")
   centroids <- coordinates(shp)  
   sub_area <- shp$RAION
   okrug <- shp$OKRUGS
@@ -230,6 +234,17 @@ For the location data you have to read in an [external data file](https://www.ka
     mutate(count_na_perrow = apply(., 1, function(x) sum(is.na(x))))
 ```
 
+## The following code was added to this script by the authors of this repo
+```{r}
+
+```
+
+
+```{r}
+# output .csv dataset with newly engineered features
+write.csv(train, "../data/cleanEngineeredTrain.csv")
+write.csv(train[sample(nrow(train), 500),], "../data/sampleCleanEngineeredTrain.csv")
+```
 
 ### Current To-do List
 
