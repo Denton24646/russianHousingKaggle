@@ -1,4 +1,4 @@
-setwd("~/Kaggle/Sberbank")
+setwd("~/russianHousingKaggle/")
 macro <- read.csv("macro.csv", header = TRUE)
 
 head(macro)
