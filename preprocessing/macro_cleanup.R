@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 setwd("~/russianHousingKaggle/")
 macro <- read.csv("macro.csv", header = TRUE)
 

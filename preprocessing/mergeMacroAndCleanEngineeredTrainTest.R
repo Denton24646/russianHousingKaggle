@@ -12,4 +12,4 @@ mergedTest = merge(macro, test, by = 'timestamp')
 print(length(colnames(macro)) + length(colnames(test)) - 1 == length(mergedTest))
 
 write.csv(mergedTrain, file = "data/macroCleanEngineeredTrain.csv")
-write.csv(mergedTest, file = "data/marcroCleanEngineeredTrest.csv")
+write.csv(mergedTest, file = "data/macroCleanEngineeredTest.csv")

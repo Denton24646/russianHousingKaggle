@@ -10,14 +10,16 @@ output:
 
 DISCLAIMER: This script was taken from [this kaggle kernel](https://www.kaggle.com/philippsp/a-collection-of-new-features/code), most of this script is not the work of the authors of this repo.
 
+The script was reduced to add the set of engineered features which apply to both the test and the train set.
+
 There are already a lot of good ideas for feature engineering around for this competition. However, they are all scattered across
 different kernels and discussion threads.**Therefore, my plan here is to provide an easily accessible and extensible list of ideas for feature engineering (together with their implementation in R).**
 
 ```
 Recent updates:
-- added for each sub area distance to kremlin
-- added longitude and latitude of sub_area
-- added proportions of houses with certain build material characteristics
+- added Feature Importance Analysis
+- added more Data cleaning
+- grouped appartments in the same building complex together
 ```
 
 Feel free to add new ideas in the comments and
@@ -25,36 +27,66 @@ I'll add them to the list and please don't forget to **upvote** if you find it u
 
 Having said all that, let's jump right into it:
 
-```{r setup, include=FALSE}
-  knitr::opts_chunk$set(echo = TRUE)
-```
-
 ### Initialization
-```{r warning=FALSE, eval = FALSE}
-  library(readr)
+```{r message=FALSE, warning=FALSE}
+  library(data.table)
   library(dplyr)
   library(lubridate)
   library(stringr)
+  library(caret)
+  library(Matrix)
+  library(geosphere)
 
-  train <- read_csv('../data/train_clean.csv')
+  train <- fread('../data/test_clean.csv')
+  
 ```
 
-##### Minimal data cleaning
+##### Some data cleaning
 
-```{r eval=FALSE}
+```{r }
 train <- train %>% 
-  mutate(max_floor = as.numeric(max_floor), kitch_sq=as.numeric(kitch_sq), num_room=as.numeric(num_room), build_year=as.numeric(build_year), sub_area=as.factor(sub_area))
+  mutate(max_floor = as.numeric(max_floor), kitch_sq=as.numeric(kitch_sq), num_room=as.numeric(num_room), build_year=as.numeric(build_year), sub_area=as.factor(sub_area)) 
+
 train <- train %>% 
-  filter(build_year < 2020)
+  filter(build_year < 2020 | is.na(build_year))
+
+train <- train %>% mutate(strange_full_sq = ifelse(full_sq <= 1, full_sq+1,0), full_sq = ifelse(full_sq > 800 | full_sq <= 1, NA, full_sq))
+
+train <- train %>% mutate(strange_life_sq = ifelse(life_sq <= 1, life_sq+1,0), strange_life_sq= ifelse(is.na(strange_life_sq),0,strange_life_sq), life_sq = ifelse(life_sq > 400 | life_sq <= 1, NA, life_sq))
+
+train <- train %>% mutate(kitch_sq = as.numeric(kitch_sq),strange_kitch_sq = ifelse(kitch_sq <= 1, kitch_sq+1,0),kitch_sq = ifelse(kitch_sq > 200 | kitch_sq <= 1, NA, kitch_sq))
+
+
+train <- train %>% mutate(num_room = as.numeric(num_room))
+
+train <- train %>% mutate(build_year = as.numeric(build_year), strange_build_year = ifelse(build_year <= 1, build_year+1,0), build_year = ifelse(build_year > 2018 | build_year < 1860, NA, build_year))
+
+train <- train %>% mutate(floor = ifelse(floor > 45, NA, floor))
+
+train <- train %>% mutate(max_floor = as.numeric(max_floor), strange_max_floor = ifelse(max_floor <= 1, max_floor+1,0), max_floor = ifelse(max_floor > 60 | max_floor <=1, NA, max_floor))
+
+train <- train %>% mutate(state = as.numeric(state), state = ifelse(state > 4, NA, state))
+
+train <- train %>% mutate(material = as.factor(material), material = ifelse(material == 3, NA, material))
+
+train <- train %>% mutate(product_type = factor(product_type))
+
+train <- train %>% mutate(sub_area = factor(sub_area))
+
+# more cleaning
+train <- train %>% filter(kitch_sq < full_sq | is.na(kitch_sq))
+train <- train %>% filter(kitch_sq < life_sq | is.na(kitch_sq))
+
+train <- train %>% mutate(num_room = ifelse(num_room==0,NA,num_room))
+
 
 ```
-
 
 ### Time features
 
 #### Split the timestamp feature
 
-```{r eval=FALSE}
+```{r }
   # year
   train <- train %>% 
     mutate(year = year(timestamp))
@@ -67,7 +99,7 @@ train <- train %>%
 
 #### Get month, week, weekday
 
-```{r eval=FALSE}
+```{r }
   # month of year
   train <- train %>% 
     mutate(month_of_year = month(train$timestamp))
@@ -90,9 +122,7 @@ train <- train %>%
 ### House characteristics
 
 
-
-
-```{r eval=FALSE}
+```{r }
   # number of floors to the top of house
   train <- train %>% 
     mutate(floor_from_top = max_floor - floor)
@@ -123,8 +153,25 @@ train <- train %>%
   
 ```
 
+### Grouping appartments together
+Some appartments seem to be in the same building. They have the same sub_area and distance to metro.
+```{r}
+  # assign a common name to them
+  train <- train %>% 
+    mutate(appartment_name = factor(str_c(sub_area,format(metro_km_avto,digits=3))))
+  
+  # get the number of appartments in group
+  train <- train %>% 
+    group_by(appartment_name) %>% 
+    tally() %>% 
+    right_join(train,by="appartment_name")
+
+```
+
+
+
 ### General sale characteristics
-```{r eval=F}
+```{r }
   # number of sales per year_month
   train <- train %>% 
     group_by(year_month) %>% 
@@ -132,61 +179,8 @@ train <- train %>%
     right_join(train,by="year_month")
 ```
 
-### Sub Area characteristics
-
-#### Location data
-For the location data you have to read in an [external data file](https://www.kaggle.com/jtremoureux/administrative-divisions-of-moscow). You can find a tutorial [here](https://www.kaggle.com/product-feedback/32423#post179905).
-
-```
-  Skipping due to the dependency hell we enter when trying tinstall rgdal
-
-  # Longitude and Latitude
-  library(rgdal) # read the shapefile with readOGR()
-  shp <- readOGR(dsn = "../data/moscow_adm.shp", layer = "moscow_adm")
-  centroids <- coordinates(shp)  
-  sub_area <- shp$RAION
-  okrug <- shp$OKRUGS
-  location_data <- data.frame(sub_area = sub_area, okrug = okrug, longitude=centroids[,1], latitude=centroids[,2])
-  train <- train %>% 
-    left_join(location_data,by="sub_area")
-  
-  # Calculate distance from Kremlin for each sub_area
-  library(geosphere)
-  kremlin = data.frame(longitude = 37.617664,latitude = 55.752121)
-  train <- train %>% 
-    group_by(sub_area) %>% 
-    top_n(n = 1, wt=id) %>% 
-    ungroup %>% 
-    mutate(distance_from_kremlin = distm(.[c("longitude","latitude")], kremlin, fun=distHaversine)) %>% 
-    right_join(train, by="sub_area")
-
-```
-
-
-#### General price level of Sub Areas
-```{r eval =F}
-  # average price per raion
-  train <- train %>% 
-    group_by(sub_area) %>% 
-    summarize(mean_price_raion = mean(price_doc)) %>% 
-    right_join(train,by="sub_area")
-
-  # average price per raion per year
-  train <- train %>% 
-    group_by(sub_area, year) %>% 
-    summarize(mean_price_raion_year = mean(price_doc)) %>% 
-    right_join(train,by="sub_area")
-  
-  # average price per sqm per raion
-  train <- train %>% 
-    group_by(sub_area) %>% 
-    summarize(mean_price_persqm_raion = mean(price_doc/full_sq, na.rm=T)) %>% 
-    right_join(train,by="sub_area")
-  
-```
-
 #### Population characteristics
-```{r eval=F}
+```{r }
   # population density per raion (i.e. Number of people per square meter)
   train <- train %>% 
     mutate(pop_density_raion = raion_popul/area_m)
@@ -202,7 +196,7 @@ For the location data you have to read in an [external data file](https://www.ka
 ```
 
 #### Building information
-```{r eval=F}
+```{r }
   # average building height per raion
   train <- train %>% 
     group_by(sub_area) %>% 
@@ -215,7 +209,7 @@ For the location data you have to read in an [external data file](https://www.ka
 ```
 
 #### Educational characteristics
-```{r eval=F}
+```{r }
   # ratio of number of pupils and preschool seats
   train <- train %>% 
     mutate(ratio_preschool = children_preschool / preschool_quota)
@@ -228,27 +222,21 @@ For the location data you have to read in an [external data file](https://www.ka
 
 
 ### dataset related features
-```{r eval =F}
+```{r}
   # number of missing values per row (this is going to take a while)
   train <- train %>% 
     mutate(count_na_perrow = apply(., 1, function(x) sum(is.na(x))))
 ```
 
-## The following code was added to this script by the authors of this repo
+
+### output
 ```{r}
-
-```
-
-
-```{r}
-# output .csv dataset with newly engineered features
-write.csv(train, "../data/cleanEngineeredTrain.csv")
-write.csv(train[sample(nrow(train), 500),], "../data/sampleCleanEngineeredTrain.csv")
+write.csv(train, file = "../data/cleanEngineeredTest.csv")
 ```
 
 ### Current To-do List
 
-1. ...
+1. Sales (by year or month) for grouped appartments.
 
 
 #### Disclaimer
@@ -256,6 +244,3 @@ write.csv(train[sample(nrow(train), 500),], "../data/sampleCleanEngineeredTrain.
 2. For consistency, I will demonstrate all these features for the train set only, while for some features it would make sense to calculate them for the full dataset
 3. For easier readibility, I do only minimal data cleaning in this kernel. As the new features are e.g. combinations of the basic features, it would make sense to properly clean those first.
 4. While I added some features on my own, most of the features were developed by someone else. As it is not easy to figure out who had the idea first, unfortunately I cannot give you proper credt. So for all of those who shared their ideas: my gratitude goes to you. 
-
-
-
