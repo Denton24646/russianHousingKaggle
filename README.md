@@ -4,6 +4,6 @@ This repository holds all of the resources that were used in our participation i
   
 ## Preprocessing
 
-### training data
+We take the original ```train.csv``` dataset and clean it using the copied scipt ```preprocessing/dataCleaning.ipynb``` which outputs ```cleaned_train.csv``` and ```cleaned_test.csv```. We then feed the cleaned datasets into the script ```trainFeatureEngineering.Rmd``` which outputs ```cleanedEngineeredTrain.csv``` and ```cleanedEngineeredTest.csv```. The ```macro_cleanup.R``` script takes in the ```macro.csv``` data, cleans it and outputs ```complete_macro_data.csv```. Finally, to create our fully cleaned and expanded train and test set the script ```mergeMacroAndCleanEngineeredTrainTest.R``` merges ```complete_macro_data.csv``` with ```cleanEngineeredTrain.csv``` and ```cleanEngineeredTest.csv``` to produce ```macroCleanEngineeredTrain.csv``` and ```macroCleanEngineeredTest.csv```.
 
-We take the original ```train.csv``` dataset and clean it using the copied scipt ```preprocessing/dataCleaning.ipynb``` which outputs ```cleaned_train.csv``` and ```cleaned_test.csv```. We then feed the cleaned datasets into copied script ```trainFeatureEngineering.Rmd``` which outputs ```cleanedEngineeredTrain.csv``` and ```cleanedEngineeredTest.csv```. This gives us cleaned and feature-expanded train and test data which we will then analyze before finally using it in our models.
+
