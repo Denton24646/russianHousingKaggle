@@ -1,6 +1,3 @@
-Feature importance measure computer by forestFeatureImportance.ipynb on the macroCleanEngineeredTest.csv set:
-
-Feature ranking:
 1. floor (0.049212)
 2. full_sq (0.045099)
 3. life_sq (0.032993)
