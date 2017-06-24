@@ -16,4 +16,4 @@ On an individual level the models performed reasonably well, with xgboost and RF
 
 ## Ensemble 
 
-The first ensemble method was simply an intuitive average of the model outputs based on how well they performed. We were pleasantly surpised to see a big jump in performance to .321, enough to put us roughly in the top 50%. After that we performed an weighted average ensemble based on the RMSLE but this result proved worse than the intuitive averaging tried initially. 
+The first ensemble method was simply an intuitive average of the model outputs based on how well they performed. We were pleasantly surpised to see a big jump in performance to .321, enough to put us roughly in the top 50%. After that we performed an weighted average ensemble based on the RMSLE but this result proved worse than the intuitive averaging tried initially. More weighted averaging produced our final submission of .319 which placed us in the top 47%. 
